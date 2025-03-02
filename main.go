@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,6 +21,8 @@ type model struct {
 	inputMode     bool
 	inputField    string
 	inputValue    string
+	filePath      string
+	passphrase    string
 }
 
 const (
@@ -32,17 +35,17 @@ const (
 	optionCancel             = "Cancel"
 	optionFilePath           = "Enter file path"
 	optionPassphrase         = "Enter passphrase"
+	optionGenerateKeys       = "Generate Keys"
 )
 
 var (
 	titleASCII = `
-   ####    ####    ######   ##   ##  ##   ##  ######            ##   ##    ##     ##   ##    ##       ####   #######  ######
-  ##  ##    ##     # ## #   ##   ##  ##   ##   ##  ##           ### ###   ####    ###  ##   ####     ##  ##   ##   #   ##  ##
- ##         ##       ##     ##   ##  ##   ##   ##  ##           #######  ##  ##   #### ##  ##  ##   ##        ## #     ##  ##
- ##         ##       ##     #######  ##   ##   #####            #######  ##  ##   ## ####  ##  ##   ##        ####     #####
- ##  ###    ##       ##     ##   ##  ##   ##   ##  ##           ## # ##  ######   ##  ###  ######   ##  ###   ## #     ## ##
-  ##  ##    ##       ##     ##   ##  ##   ##   ##  ##           ##   ##  ##  ##   ##   ##  ##  ##    ##  ##   ##   #   ##  ##
-   #####   ####     ####    ##   ##   #####   ######            ##   ##  ##  ##   ##   ##  ##  ##     #####  #######  #### ##
+  ________._________________ ___  ____ _____________     _____      _____    _______      _____    _____________________________ 
+ /  _____/|   \__    ___/   |   \|    |   \______   \   /     \    /  _  \   \      \    /  _  \  /  _____/\_   _____/\______   \
+/   \  ___|   | |    | /    ~    \    |   /|    |  _/  /  \ /  \  /  /_\  \  /   |   \  /  /_\  \/   \  ___ |    __)_  |       _/
+\    \_\  \   | |    | \    Y    /    |  / |    |   \ /    Y    \/    |    \/    |    \/    |    \    \_\  \|        \ |    |   \
+ \______  /___| |____|  \___|_  /|______/  |______  / \____|__  /\____|__  /\____|__  /\____|__  /\______  /_______  / |____|_  /
+        \/                    \/                  \/          \/         \/         \/         \/        \/        \/         \/ 
 `
 
 	optionStyle = lipgloss.NewStyle().PaddingLeft(2)
@@ -98,8 +101,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			} else if m.options[m.currentOption] == optionCreateSSHKey {
 				m.menuStack = append(m.menuStack, m.options)
-				m.options = []string{optionFilePath, optionPassphrase, optionBack, optionCancel}
+				m.options = []string{optionFilePath, optionPassphrase, optionGenerateKeys, optionBack, optionCancel}
 				m.currentOption = 0
+			} else if m.options[m.currentOption] == optionGenerateKeys {
+				return m, createSSHKey(m.filePath, m.passphrase)
 			} else {
 				m.menuStack = append(m.menuStack, m.options)
 				m.options = m.subMenu
@@ -110,11 +115,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.inputMode {
 				m.inputMode = false
 				m.inputValue = strings.TrimSpace(m.inputValue)
-				// Process the input value
 				if m.inputField == optionFilePath {
-					// Handle file path input
+					m.filePath = m.inputValue
 				} else if m.inputField == optionPassphrase {
-					// Handle passphrase input
+					m.passphrase = m.inputValue
 				}
 			} else {
 				m.inputMode = true
@@ -133,7 +137,7 @@ func performAction(choice int) tea.Cmd {
 	return func() tea.Msg {
 		switch choice {
 		case 1:
-			createSSHKey()
+			// This case is handled in the Update method
 		case 2:
 			setGitConfig()
 		case 3:
@@ -175,31 +179,21 @@ func runCommand(cmd *exec.Cmd) {
 	}
 }
 
-func createSSHKey() {
-	reader := bufio.NewReader(os.Stdin)
-	var filePath, passphrase string
+func createSSHKey(filePath, passphrase string) tea.Cmd {
+	return func() tea.Msg {
+		args := []string{"-t", "rsa", "-b", "4096", "-C", "your_email@example.com"}
+		if passphrase != "" {
+			args = append(args, "-N", passphrase)
+		}
+		args = append(args, "-f", filePath)
 
-	// Demander le chemin de sauvegarde
-	fmt.Print("Enter file path to save the SSH key (e.g., /home/user/.ssh/id_rsa): ")
-	filePath, _ = reader.ReadString('\n')
-	filePath = strings.TrimSpace(filePath)
+		cmd := exec.Command("ssh-keygen", args...)
+		cmd.Stdin = os.Stdin
+		runCommand(cmd)
 
-	// Demander la phrase secrète
-	fmt.Print("Enter a passphrase for the SSH key (leave empty for no passphrase): ")
-	passphrase, _ = reader.ReadString('\n')
-	passphrase = strings.TrimSpace(passphrase)
-
-	args := []string{"-t", "rsa", "-b", "4096", "-C", "your_email@example.com"}
-	if passphrase != "" {
-		args = append(args, "-N", passphrase)
+		fmt.Println("SSH key created successfully!")
+		return nil
 	}
-	args = append(args, "-f", filePath)
-
-	cmd := exec.Command("ssh-keygen", args...)
-	cmd.Stdin = os.Stdin
-	runCommand(cmd)
-
-	fmt.Println("SSH key created successfully!")
 }
 
 func setGitConfig() {
@@ -238,6 +232,11 @@ func commitAndSync() {
 }
 
 func main() {
+	// Check the operating system
+	if runtime.GOOS == "windows" {
+		fmt.Println("Note: This script is running on Windows. Some commands might differ.")
+	}
+
 	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v\n", err)
