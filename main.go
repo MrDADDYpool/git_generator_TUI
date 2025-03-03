@@ -48,7 +48,6 @@ var (
  \______  /___| |____|  \___|_  /|______/  |______  / \____|__  /\____|__  /\____|__  /\____|__  /\______  /_______  / |____|_  /
         \/                    \/                  \/          \/         \/         \/         \/        \/        \/         \/ 
 `
-
 	optionStyle = lipgloss.NewStyle().PaddingLeft(2)
 
 	selectedOptionStyle = lipgloss.NewStyle().
@@ -164,11 +163,11 @@ func performAction(choice int) tea.Cmd {
 		case 1:
 			// This case is handled in the Update method
 		case 2:
-			setGitConfig()
+			return setGitConfigCmd()
 		case 3:
-			cloneRepo()
+			return cloneRepoCmd()
 		case 4:
-			commitAndSync()
+			return commitAndSyncCmd()
 		case 5:
 			return tea.Quit
 		}
@@ -221,39 +220,49 @@ func createSSHKey(filePath, passphrase string) tea.Cmd {
 	}
 }
 
-func setGitConfig() {
-	reader := bufio.NewReader(os.Stdin)
+func setGitConfigCmd() tea.Cmd {
+	return func() tea.Msg {
+		reader := bufio.NewReader(os.Stdin)
 
-	fmt.Print("Enter global username: ")
-	username, _ := reader.ReadString('\n')
-	username = strings.TrimSpace(username)
+		fmt.Print("Enter global username: ")
+		username, _ := reader.ReadString('\n')
+		username = strings.TrimSpace(username)
 
-	fmt.Print("Enter global email: ")
-	email, _ := reader.ReadString('\n')
-	email = strings.TrimSpace(email)
+		fmt.Print("Enter global email: ")
+		email, _ := reader.ReadString('\n')
+		email = strings.TrimSpace(email)
 
-	runCommand(exec.Command("git", "config", "--global", "user.name", username))
-	runCommand(exec.Command("git", "config", "--global", "user.email", email))
+		runCommand(exec.Command("git", "config", "--global", "user.name", username))
+		runCommand(exec.Command("git", "config", "--global", "user.email", email))
+
+		return nil
+	}
 }
 
-func cloneRepo() {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter GitHub repository URL: ")
-	repoURL, _ := reader.ReadString('\n')
-	repoURL = strings.TrimSpace(repoURL)
+func cloneRepoCmd() tea.Cmd {
+	return func() tea.Msg {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("Enter GitHub repository URL: ")
+		repoURL, _ := reader.ReadString('\n')
+		repoURL = strings.TrimSpace(repoURL)
 
-	runCommand(exec.Command("git", "clone", repoURL))
+		runCommand(exec.Command("git", "clone", repoURL))
+		return nil
+	}
 }
 
-func commitAndSync() {
-	reader := bufio.NewReader(os.Stdin)
-	fmt.Print("Enter commit message: ")
-	commitMessage, _ := reader.ReadString('\n')
-	commitMessage = strings.TrimSpace(commitMessage)
+func commitAndSyncCmd() tea.Cmd {
+	return func() tea.Msg {
+		reader := bufio.NewReader(os.Stdin)
+		fmt.Print("Enter commit message: ")
+		commitMessage, _ := reader.ReadString('\n')
+		commitMessage = strings.TrimSpace(commitMessage)
 
-	runCommand(exec.Command("git", "add", "."))
-	runCommand(exec.Command("git", "commit", "-m", commitMessage))
-	runCommand(exec.Command("git", "push", "origin", "main"))
+		runCommand(exec.Command("git", "add", "."))
+		runCommand(exec.Command("git", "commit", "-m", commitMessage))
+		runCommand(exec.Command("git", "push", "origin", "main"))
+		return nil
+	}
 }
 
 func main() {
