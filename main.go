@@ -180,9 +180,9 @@ func choicesView(m model) string {
 
 	choices := fmt.Sprintf(
 		"%s\n%s\n%s\n",
-		renderOption(optionCreateSSHKey, c == 0),
-		renderOption(optionSetGlobalGitConfig, c == 1),
-		renderOption(optionCloneGitHubRepo, c == 2),
+		renderOption(keywordStyle.Render(optionCreateSSHKey), c == 0),
+		renderOption(keywordStyle.Render(optionSetGlobalGitConfig), c == 1),
+		renderOption(keywordStyle.Render(optionCloneGitHubRepo), c == 2),
 	)
 
 	return fmt.Sprintf(tpl, choices)
@@ -190,9 +190,9 @@ func choicesView(m model) string {
 
 func renderOption(label string, selected bool) string {
 	if selected {
-		return selectedOptionStyle.Render(checkboxStyle.Render("[x] ") + keywordStyle.Render(label))
+		return selectedOptionStyle.Render(bracketStyle.Render("[x] ") + checkboxStyle.Render(label))
 	}
-	return optionStyle.Render(checkboxStyle.Render("[ ] ") + label)
+	return optionStyle.Render(bracketStyle.Render("[ ] ") + label)
 }
 
 func runCommand(cmd *exec.Cmd) {
