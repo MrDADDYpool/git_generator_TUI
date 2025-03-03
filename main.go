@@ -176,9 +176,9 @@ func choicesView(m model) string {
 	c := m.Choice
 
 	tpl := "%s\n\n"
-	tpl += subtleStyle.Render("j/k, up/down: select") +
-		subtleStyle.Render("enter: choose") +
-		subtleStyle.Render("q, esc: quit")
+	tpl += subtleStyle.Render(" j/k, up/down: select ") +
+		subtleStyle.Render(" enter: choose") +
+		subtleStyle.Render(" q, esc: quit")
 
 	choices := fmt.Sprintf(
 		"%s\n%s\n%s\n",
