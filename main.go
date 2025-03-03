@@ -47,12 +47,12 @@ const (
 
 var (
 	titleASCII = `
-  ________._________________ ___  ____ _____________     _____      _____    _______      _____    _____________________________ 
+  ________._________________ ___  ____ _____________     _____      _____    _______      _____    _____________________________
  /  _____/|   \__    ___/   |   \|    |   \______   \   /     \    /  _  \   \      \    /  _  \  /  _____/\_   _____/\______   \
 /   \  ___|   | |    | /    ~    \    |   /|    |  _/  /  \ /  \  /  /_\  \  /   |   \  /  /_\  \/   \  ___ |    __)_  |       _/
 \    \_\  \   | |    | \    Y    /    |  / |    |   \ /    Y    \/    |    \/    |    \/    |    \    \_\  \|        \ |    |   \
  \______  /___| |____|  \___|_  /|______/  |______  / \____|__  /\____|__  /\____|__  /\____|__  /\______  /_______  / |____|_  /
-        \/                    \/                  \/          \/         \/         \/         \/        \/        \/         \/ 
+        \/                    \/                  \/          \/         \/         \/         \/        \/        \/         \/
 `
 
 	optionStyle = lipgloss.NewStyle().PaddingLeft(2)
@@ -114,7 +114,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.InputField.Focus()
 			}
 
-			return m, nil
+			return m, performAction(m.Choice)
 		}
 
 	// We handle errors just like any other message
@@ -132,15 +132,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func performAction(choice int) tea.Cmd {
 	return func() tea.Msg {
 		switch choice {
+		case 0:
+			return createSSHKey("id_rsa", "")
 		case 1:
-			// This case is handled in the Update method
-		case 2:
 			setGitConfig()
-		case 3:
+		case 2:
 			cloneRepo()
-		case 4:
+		case 3:
 			commitAndSync()
-		case 5:
+		case 4:
 			return tea.Quit
 		}
 		return nil
@@ -155,7 +155,6 @@ func (m model) View() string {
 	var output string
 
 	if m.ShowInputField {
-
 		output += fmt.Sprintf(
 			"Input ?\n\n%s\n\n%s",
 			m.InputField.View(),
@@ -163,12 +162,12 @@ func (m model) View() string {
 		) + "\n"
 	}
 
-	if m.InputField.Value() != "" && m.ShowInputField == false {
+	if m.InputField.Value() != "" && !m.ShowInputField {
 		output += fmt.Sprintf("Value : %s", m.InputField.Value())
 	}
 	output += fmt.Sprintf("\n\n%s", choicesView(m))
 
-	return output
+	return mainStyle.Render(output)
 }
 
 // The first view, where you're choosing a task
@@ -182,9 +181,9 @@ func choicesView(m model) string {
 
 	choices := fmt.Sprintf(
 		"%s\n%s\n%s\n",
-		checkbox("Ton menu 1", c == 0),
-		checkbox("Ton menu 2", c == 1),
-		checkbox("Ton menu 3", c == 2),
+		checkbox(optionCreateSSHKey, c == 0),
+		checkbox(optionSetGlobalGitConfig, c == 1),
+		checkbox(optionCloneGitHubRepo, c == 2),
 	)
 
 	return fmt.Sprintf(tpl, choices)
