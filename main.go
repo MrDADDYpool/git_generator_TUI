@@ -19,11 +19,20 @@ type (
 
 // General stuff for styling the view
 var (
-	keywordStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
-	subtleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-	ticksStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
-	checkboxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
-	mainStyle     = lipgloss.NewStyle().MarginLeft(2)
+	keywordStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
+	subtleStyle         = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	ticksStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
+	checkboxStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
+	mainStyle           = lipgloss.NewStyle().MarginLeft(2)
+	optionStyle         = lipgloss.NewStyle().PaddingLeft(2)
+	selectedOptionStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("205")).
+				Background(lipgloss.Color("57")).
+				PaddingLeft(2).
+				Bold(true)
+	bracketStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	cursorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("160")).SetString("X")
+	inputStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 )
 
 type model struct {
@@ -54,18 +63,6 @@ var (
  \______  /___| |____|  \___|_  /|______/  |______  / \____|__  /\____|__  /\____|__  /\____|__  /\______  /_______  / |____|_  /
         \/                    \/                  \/          \/         \/         \/         \/        \/        \/         \/
 `
-
-	optionStyle = lipgloss.NewStyle().PaddingLeft(2)
-
-	selectedOptionStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("205")).
-				Background(lipgloss.Color("57")).
-				PaddingLeft(2).
-				Bold(true)
-
-	bracketStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	cursorStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("160")).SetString("X")
-	inputStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 )
 
 func initialModel() model {
@@ -73,6 +70,7 @@ func initialModel() model {
 	ti.Placeholder = "https://github.com/lol"
 	ti.CharLimit = 156
 	ti.Width = 20
+	ti.Cursor.Style = cursorStyle
 
 	return model{
 		Choice:         0,
@@ -151,14 +149,15 @@ func performAction(choice int) tea.Cmd {
 // Qui s'adapte au model
 // Oublie le string builder
 func (m model) View() string {
-
 	var output string
+
+	output += titleASCII + "\n"
 
 	if m.ShowInputField {
 		output += fmt.Sprintf(
 			"Input ?\n\n%s\n\n%s",
-			m.InputField.View(),
-			"(esc to quit)",
+			inputStyle.Render(m.InputField.View()),
+			subtleStyle.Render("(esc to quit)"),
 		) + "\n"
 	}
 
@@ -181,19 +180,19 @@ func choicesView(m model) string {
 
 	choices := fmt.Sprintf(
 		"%s\n%s\n%s\n",
-		checkbox(optionCreateSSHKey, c == 0),
-		checkbox(optionSetGlobalGitConfig, c == 1),
-		checkbox(optionCloneGitHubRepo, c == 2),
+		renderOption(optionCreateSSHKey, c == 0),
+		renderOption(optionSetGlobalGitConfig, c == 1),
+		renderOption(optionCloneGitHubRepo, c == 2),
 	)
 
 	return fmt.Sprintf(tpl, choices)
 }
 
-func checkbox(label string, checked bool) string {
-	if checked {
-		return checkboxStyle.Render("[x] " + label)
+func renderOption(label string, selected bool) string {
+	if selected {
+		return selectedOptionStyle.Render(checkboxStyle.Render("[x] ") + keywordStyle.Render(label))
 	}
-	return fmt.Sprintf("[ ] %s", label)
+	return optionStyle.Render(checkboxStyle.Render("[ ] ") + label)
 }
 
 func runCommand(cmd *exec.Cmd) {
@@ -216,7 +215,7 @@ func createSSHKey(filePath, passphrase string) tea.Cmd {
 		cmd.Stdin = os.Stdin
 		runCommand(cmd)
 
-		fmt.Println("SSH key created successfully!")
+		fmt.Println(ticksStyle.Render("SSH key created successfully!"))
 		return nil
 	}
 }
