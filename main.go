@@ -23,6 +23,7 @@ type model struct {
 	inputValue    string
 	filePath      string
 	passphrase    string
+	step          int
 }
 
 const (
@@ -65,6 +66,7 @@ func initialModel() model {
 	return model{
 		options:   []string{optionCreateSSHKey, optionSetGlobalGitConfig, optionCloneGitHubRepo, optionCommitAndSync, optionExit},
 		menuStack: [][]string{},
+		step:      0,
 	}
 }
 
@@ -96,6 +98,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.options = m.menuStack[len(m.menuStack)-1]
 					}
 					m.inputMode = false
+					m.step = 0
 				}
 			} else if m.options[m.currentOption] == optionCancel {
 				return m, tea.Quit
@@ -103,6 +106,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.menuStack = append(m.menuStack, m.options)
 				m.options = []string{optionFilePath, optionPassphrase, optionGenerateKeys, optionBack, optionCancel}
 				m.currentOption = 0
+				m.step = 1
 			} else if m.options[m.currentOption] == optionGenerateKeys {
 				return m, createSSHKey(m.filePath, m.passphrase)
 			} else {
@@ -115,10 +119,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.inputMode {
 				m.inputMode = false
 				m.inputValue = strings.TrimSpace(m.inputValue)
-				if m.inputField == optionFilePath {
+				if m.step == 1 {
 					m.filePath = m.inputValue
-				} else if m.inputField == optionPassphrase {
+					m.step = 2
+					m.inputField = optionPassphrase
+					m.inputValue = ""
+				} else if m.step == 2 {
 					m.passphrase = m.inputValue
+					m.step = 3
+					return m, createSSHKey(m.filePath, m.passphrase)
 				}
 			} else {
 				m.inputMode = true
@@ -128,6 +137,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.inputMode = false
 			m.inputValue = ""
+		case "ctrl+u":
+			if m.inputMode {
+				m.inputValue = ""
+			}
+		case "ctrl+w":
+			if m.inputMode && len(m.inputValue) > 0 {
+				// Delete the last word
+				fields := strings.Fields(m.inputValue)
+				if len(fields) > 0 {
+					m.inputValue = strings.Join(fields[:len(fields)-1], " ")
+				}
+			}
+		default:
+			if m.inputMode {
+				m.inputValue += msg.String()
+			}
 		}
 	}
 	return m, nil
