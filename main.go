@@ -8,21 +8,28 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+type (
+	errMsg error
+)
+
+// General stuff for styling the view
+var (
+	keywordStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("211"))
+	subtleStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	ticksStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("79"))
+	checkboxStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("212"))
+	mainStyle     = lipgloss.NewStyle().MarginLeft(2)
+)
+
 type model struct {
-	choice        int
-	currentOption int
-	options       []string
-	subMenu       []string
-	menuStack     [][]string
-	inputMode     bool
-	inputField    string
-	inputValue    string
-	filePath      string
-	passphrase    string
+	Choice         int
+	ShowInputField bool
+	InputField     textinput.Model
 }
 
 const (
@@ -62,9 +69,15 @@ var (
 )
 
 func initialModel() model {
+	ti := textinput.New()
+	ti.Placeholder = "https://github.com/lol"
+	ti.CharLimit = 156
+	ti.Width = 20
+
 	return model{
-		options:   []string{optionCreateSSHKey, optionSetGlobalGitConfig, optionCloneGitHubRepo, optionCommitAndSync, optionExit},
-		menuStack: [][]string{},
+		Choice:         0,
+		ShowInputField: false,
+		InputField:     ti,
 	}
 }
 
@@ -72,65 +85,48 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
+// A chaque event, qu'est-ce qu'on fait sur le model ?
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q":
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
-		case "up", "k":
-			if m.currentOption > 0 {
-				m.currentOption--
-			}
-		case "down", "j":
-			if m.currentOption < len(m.options)-1 {
-				m.currentOption++
-			}
-		case " ":
-			if m.options[m.currentOption] == optionBack {
-				if len(m.menuStack) > 0 {
-					m.menuStack = m.menuStack[:len(m.menuStack)-1]
-					if len(m.menuStack) == 0 {
-						m.options = []string{optionCreateSSHKey, optionSetGlobalGitConfig, optionCloneGitHubRepo, optionCommitAndSync, optionExit}
-					} else {
-						m.options = m.menuStack[len(m.menuStack)-1]
-					}
-					m.inputMode = false
-				}
-			} else if m.options[m.currentOption] == optionCancel {
-				return m, tea.Quit
-			} else if m.options[m.currentOption] == optionCreateSSHKey {
-				m.menuStack = append(m.menuStack, m.options)
-				m.options = []string{optionFilePath, optionPassphrase, optionGenerateKeys, optionBack, optionCancel}
-				m.currentOption = 0
-			} else if m.options[m.currentOption] == optionGenerateKeys {
-				return m, createSSHKey(m.filePath, m.passphrase)
+		case tea.KeyUp:
+			if m.Choice > 0 {
+				m.Choice--
 			} else {
-				m.menuStack = append(m.menuStack, m.options)
-				m.options = m.subMenu
-				m.currentOption = 0
-				return m, performAction(m.choice)
+				m.Choice = 2
 			}
-		case "enter":
-			if m.inputMode {
-				m.inputMode = false
-				m.inputValue = strings.TrimSpace(m.inputValue)
-				if m.inputField == optionFilePath {
-					m.filePath = m.inputValue
-				} else if m.inputField == optionPassphrase {
-					m.passphrase = m.inputValue
-				}
+		case tea.KeyDown:
+			if m.Choice >= 2 {
+				m.Choice = 0
 			} else {
-				m.inputMode = true
-				m.inputField = m.options[m.currentOption]
-				m.inputValue = ""
+				m.Choice++
 			}
-		case "esc":
-			m.inputMode = false
-			m.inputValue = ""
+		case tea.KeyEnter:
+			if m.ShowInputField {
+				m.ShowInputField = false
+			} else {
+				m.ShowInputField = true
+				m.InputField.Focus()
+			}
+
+			return m, nil
 		}
+
+	// We handle errors just like any other message
+	case errMsg:
+		return m, tea.Quit
 	}
-	return m, nil
+
+	if m.ShowInputField {
+		m.InputField, cmd = m.InputField.Update(msg)
+	}
+
+	return m, cmd
 }
 
 func performAction(choice int) tea.Cmd {
@@ -151,24 +147,54 @@ func performAction(choice int) tea.Cmd {
 	}
 }
 
+// Ici tu penses à ton interface totale
+// Qui s'adapte au model
+// Oublie le string builder
 func (m model) View() string {
-	var b strings.Builder
 
-	b.WriteString(titleASCII + "\n\n")
+	var output string
 
-	if m.inputMode {
-		b.WriteString(inputStyle.Render(fmt.Sprintf("%s: %s", m.inputField, m.inputValue)) + "\n\n")
+	if m.ShowInputField {
+
+		output += fmt.Sprintf(
+			"Input ?\n\n%s\n\n%s",
+			m.InputField.View(),
+			"(esc to quit)",
+		) + "\n"
 	}
 
-	for i, option := range m.options {
-		if m.currentOption == i {
-			b.WriteString(bracketStyle.Render("[") + cursorStyle.String() + bracketStyle.Render("] ") + selectedOptionStyle.Render(option) + "\n")
-		} else {
-			b.WriteString(bracketStyle.Render("[ ] ") + optionStyle.Render(option) + "\n")
-		}
+	if m.InputField.Value() != "" && m.ShowInputField == false {
+		output += fmt.Sprintf("Value : %s", m.InputField.Value())
 	}
+	output += fmt.Sprintf("\n\n%s", choicesView(m))
 
-	return b.String()
+	return output
+}
+
+// The first view, where you're choosing a task
+func choicesView(m model) string {
+	c := m.Choice
+
+	tpl := "%s\n\n"
+	tpl += subtleStyle.Render("j/k, up/down: select") +
+		subtleStyle.Render("enter: choose") +
+		subtleStyle.Render("q, esc: quit")
+
+	choices := fmt.Sprintf(
+		"%s\n%s\n%s\n",
+		checkbox("Ton menu 1", c == 0),
+		checkbox("Ton menu 2", c == 1),
+		checkbox("Ton menu 3", c == 2),
+	)
+
+	return fmt.Sprintf(tpl, choices)
+}
+
+func checkbox(label string, checked bool) string {
+	if checked {
+		return checkboxStyle.Render("[x] " + label)
+	}
+	return fmt.Sprintf("[ ] %s", label)
 }
 
 func runCommand(cmd *exec.Cmd) {
