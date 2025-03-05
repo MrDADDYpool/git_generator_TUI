@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/schollz/progressbar"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -158,9 +160,11 @@ func checkDependencies() {
 
 // Configure le service Git
 func configureGitService(service string) {
+	bar := progressbar.New(3) // Initialisation de la barre de progression
 	steps := []string{"Génération de la clé SSH", "Ajout de la clé SSH à l'agent", "Test de la connexion SSH"}
+
 	for i, step := range steps {
-		fmt.Printf("[%d%%] %s \n", (i+1)*33, step)
+		fmt.Printf("[%d%%] %s...\n", (i+1)*33, step)
 		switch i {
 		case 0:
 			sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", os.Getenv("HOME"))
@@ -171,6 +175,7 @@ func configureGitService(service string) {
 		case 2:
 			testSSHConnection(service)
 		}
+		bar.Add(1) // Mise à jour de la barre de progression
 	}
 	fmt.Println("[100%] Configuration terminée avec succès !")
 }
