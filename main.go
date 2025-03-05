@@ -158,13 +158,21 @@ func checkDependencies() {
 
 // Configure le service Git
 func configureGitService(service string) {
-	fmt.Println("Génération de la clé SSH...")
-	sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", os.Getenv("HOME"))
-	generateSSHKey(sshKeyPath)
-	fmt.Println("Ajout de la clé SSH à l'agent...")
-	runCommand(exec.Command("ssh-add", sshKeyPath))
-	fmt.Println("Test de la connexion SSH...")
-	testSSHConnection(service)
+	steps := []string{"Génération de la clé SSH", "Ajout de la clé SSH à l'agent", "Test de la connexion SSH"}
+	for i, step := range steps {
+		fmt.Printf("[%d%%] %s \n", (i+1)*33, step)
+		switch i {
+		case 0:
+			sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", os.Getenv("HOME"))
+			generateSSHKey(sshKeyPath)
+		case 1:
+			sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", os.Getenv("HOME"))
+			runCommand(exec.Command("ssh-add", sshKeyPath))
+		case 2:
+			testSSHConnection(service)
+		}
+	}
+	fmt.Println("[100%] Configuration terminée avec succès !")
 }
 
 // Génère une clé SSH
