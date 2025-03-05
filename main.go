@@ -192,7 +192,11 @@ func testSSHConnection(service string) {
 func cloneRepository(repoURL string) {
 	fmt.Println("Clonage du dépôt en cours...")
 	cmd := exec.Command("git", "clone", repoURL)
-	runCommand(cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Erreur lors du clonage du dépôt : %v %s", err, string(output))
+		return
+	}
 	fmt.Println("Dépôt cloné avec succès !")
 }
 
