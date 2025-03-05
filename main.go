@@ -1,12 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -16,6 +16,7 @@ var (
 	titleStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
 	optionStyle         = lipgloss.NewStyle().Padding(1, 2).Foreground(lipgloss.Color("69"))
 	selectedOptionStyle = lipgloss.NewStyle().Padding(1, 2).Foreground(lipgloss.Color("229")).Background(lipgloss.Color("63")).Bold(true)
+	stepTitleStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("208")).Bold(true)
 )
 
 // ASCII Art du titre
@@ -37,58 +38,110 @@ func main() {
 	}
 }
 
+// États du menu
+type step int
+
+const (
+	stepChoice step = iota
+	stepGitHub
+	stepGitea
+	stepCloneRepo
+)
+
 // Modèle pour l'interface
 type model struct {
 	choice int
+	input  textinput.Model
+	step   step
 }
 
 func initialModel() model {
-	return model{choice: 0}
+	ti := textinput.New()
+	ti.Placeholder = "https://gitea.example.com"
+	ti.Focus()
+	ti.CharLimit = 100
+	ti.Width = 40
+	return model{choice: 0, input: ti, step: stepChoice}
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	return textinput.Blink
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q":
 			return m, tea.Quit
 		case "up":
-			if m.choice > 0 {
+			if m.step == stepChoice && m.choice > 0 {
 				m.choice--
 			}
 		case "down":
-			if m.choice < 1 {
+			if m.step == stepChoice && m.choice < 2 {
 				m.choice++
 			}
 		case "enter":
-			if m.choice == 0 {
-				configureGitService("github.com")
-			} else if m.choice == 1 {
-				fmt.Print("Entrez l'URL de l'instance Gitea : ")
-				reader := bufio.NewReader(os.Stdin)
-				instance, _ := reader.ReadString('\n')
-				configureGitService(strings.TrimSpace(instance))
+			if m.step == stepChoice {
+				if m.choice == 0 {
+					m.step = stepGitHub
+					configureGitService("github.com")
+					m.step = stepChoice
+				} else if m.choice == 1 {
+					m.step = stepGitea
+					m.input.Focus()
+				} else {
+					m.step = stepCloneRepo
+					m.input.Focus()
+				}
+			} else if m.step == stepGitea {
+				configureGitService(strings.TrimSpace(m.input.Value()))
+				m.input.Reset()
+				m.step = stepChoice
+			} else if m.step == stepCloneRepo {
+				cloneRepository(strings.TrimSpace(m.input.Value()))
+				m.input.Reset()
+				m.step = stepChoice
 			}
 		}
 	}
-	return m, nil
+
+	if m.step == stepGitea || m.step == stepCloneRepo {
+		m.input, cmd = m.input.Update(msg)
+	}
+
+	return m, cmd
 }
 
 func (m model) View() string {
-	options := []string{"Configurer GitHub", "Configurer Gitea"}
-	output := titleASCII + "\n"
-	for i, option := range options {
-		if i == m.choice {
-			output += selectedOptionStyle.Render(option) + "\n"
-		} else {
-			output += optionStyle.Render(option) + "\n"
+	var output string
+	output += titleASCII + "\n"
+
+	switch m.step {
+	case stepChoice:
+		output += stepTitleStyle.Render("Sélectionnez une option :") + "\n"
+		options := []string{"Configurer GitHub", "Configurer Gitea", "Cloner un dépôt"}
+		for i, option := range options {
+			if i == m.choice {
+				output += selectedOptionStyle.Render(option) + "\n"
+			} else {
+				output += optionStyle.Render(option) + "\n"
+			}
 		}
+		output += "\n↑↓ pour naviguer, Entrée pour sélectionner, q pour quitter."
+
+	case stepGitea:
+		output += stepTitleStyle.Render("Entrez l'URL de l'instance Gitea :") + "\n"
+		output += m.input.View() + "\n(Entrée pour valider)"
+
+	case stepCloneRepo:
+		output += stepTitleStyle.Render("Entrez l'URL du dépôt à cloner (HTTPS ou SSH) :") + "\n"
+		output += m.input.View() + "\n(Entrée pour valider)"
 	}
-	output += "\n↑↓ pour naviguer, Entrée pour sélectionner, q pour quitter."
+
 	return output
 }
 
@@ -119,20 +172,20 @@ func generateSSHKey(filePath string) {
 	cmd := exec.Command("ssh-keygen", "-t", "rsa", "-b", "4096", "-C", "your_email@example.com", "-f", filePath, "-N", "")
 	runCommand(cmd)
 	fmt.Println("Clé SSH générée avec succès !")
-	pubKeyPath := filePath + ".pub"
-	pubKey, err := os.ReadFile(pubKeyPath)
-	if err == nil {
-		fmt.Println("Copiez cette clé publique sur GitHub/Gitea :")
-		fmt.Println(string(pubKey))
-	} else {
-		fmt.Println("Erreur lors de la lecture de la clé publique :", err)
-	}
 }
 
 // Teste la connexion SSH
 func testSSHConnection(service string) {
 	cmd := exec.Command("ssh", "-T", fmt.Sprintf("git@%s", service))
 	runCommand(cmd)
+}
+
+// Clone un dépôt Git via HTTPS ou SSH
+func cloneRepository(repoURL string) {
+	fmt.Println("Clonage du dépôt en cours...")
+	cmd := exec.Command("git", "clone", repoURL)
+	runCommand(cmd)
+	fmt.Println("Dépôt cloné avec succès !")
 }
 
 // Exécute une commande système
