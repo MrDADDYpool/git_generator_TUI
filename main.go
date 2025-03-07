@@ -14,6 +14,9 @@ import (
 
 // Styles graphiques
 var (
+	successStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("46")).Bold(true)
+	errorStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
+	borderStyle         = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).Padding(1).BorderForeground(lipgloss.Color("63"))
 	titleStyle          = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
 	optionStyle         = lipgloss.NewStyle().Padding(1, 2).Foreground(lipgloss.Color("69"))
 	selectedOptionStyle = lipgloss.NewStyle().Padding(1, 2).Foreground(lipgloss.Color("229")).Background(lipgloss.Color("63")).Bold(true)
@@ -211,14 +214,17 @@ func cloneRepository(repoURL string) {
 		fmt.Printf("Erreur lors du clonage du dépôt : %v %s", err, string(output))
 		return
 	}
-	fmt.Println("Dépôt cloné avec succès !")
+	fmt.Println(successStyle.Render("Dépôt cloné avec succès !"))
 }
 
 // Exécute une commande système
 func runCommand(cmd *exec.Cmd) {
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("Erreur : %v\n", err)
+	output, err := cmd.CombinedOutput()
+	formattedOutput := borderStyle.Render(string(output))
+
+	if err != nil {
+		fmt.Println(errorStyle.Render("Erreur :"), err)
+		fmt.Println(formattedOutput)
+		return
 	}
 }
