@@ -6,8 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/schollz/progressbar"
-
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -52,12 +51,14 @@ const (
 
 // Modèle pour l'interface
 type model struct {
-	choice int
-	input  textinput.Model
-	step   step
+	choice   int
+	input    textinput.Model
+	step     step
+	progress progress.Model
 }
 
 func initialModel() model {
+
 	ti := textinput.New()
 	ti.Placeholder = "https://gitea.example.com"
 	ti.Focus()
@@ -71,7 +72,15 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+	var cmd tea.Cmd = nil
+	if msg, ok := msg.(progress.FrameMsg); ok {
+		var c tea.Cmd
+		var progressModel tea.Model
+		progressModel, c = m.progress.Update(msg)
+		cmd = tea.Batch(cmd, c)
+		m.progress = progressModel.(progress.Model)
+		return m, tea.Batch(cmd, c)
+	}
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -160,11 +169,11 @@ func checkDependencies() {
 
 // Configure le service Git
 func configureGitService(service string) {
-	bar := progressbar.New(3) // Initialisation de la barre de progression
 	steps := []string{"Génération de la clé SSH", "Ajout de la clé SSH à l'agent", "Test de la connexion SSH"}
+	// totalSteps := len(steps)
 
 	for i, step := range steps {
-		fmt.Printf("[%d%%] %s...\n", (i+1)*33, step)
+		fmt.Printf("%s... \n", step)
 		switch i {
 		case 0:
 			sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", os.Getenv("HOME"))
@@ -175,7 +184,7 @@ func configureGitService(service string) {
 		case 2:
 			testSSHConnection(service)
 		}
-		bar.Add(1) // Mise à jour de la barre de progression
+
 	}
 	fmt.Println("[100%] Configuration terminée avec succès !")
 }
