@@ -173,30 +173,42 @@ func checkDependencies() {
 // Configure le service Git
 func configureGitService(service string) {
 	steps := []string{"Génération de la clé SSH", "Ajout de la clé SSH à l'agent", "Test de la connexion SSH"}
-	// totalSteps := len(steps)
 
 	for i, step := range steps {
-		fmt.Printf("%s... \n", step)
+		fmt.Printf("%s...\n", step)
 		switch i {
 		case 0:
-			sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", os.Getenv("HOME"))
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Println(errorStyle.Render("Erreur : Impossible de récupérer le répertoire utilisateur."))
+				return
+			}
+			sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", homeDir)
 			generateSSHKey(sshKeyPath)
 		case 1:
-			sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", os.Getenv("HOME"))
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				fmt.Println(errorStyle.Render("Erreur : Impossible de récupérer le répertoire utilisateur."))
+				return
+			}
+			sshKeyPath := fmt.Sprintf("%s/.ssh/id_rsa", homeDir)
 			runCommand(exec.Command("ssh-add", sshKeyPath))
 		case 2:
 			testSSHConnection(service)
 		}
-
 	}
-	fmt.Println("[100%] Configuration terminée avec succès !")
+	fmt.Println(successStyle.Render("[100%] Configuration terminée avec succès !"))
 }
 
 // Génère une clé SSH
 func generateSSHKey(filePath string) {
+	if _, err := os.Stat(filePath); err == nil {
+		fmt.Println(successStyle.Render("Clé SSH déjà existante, aucune action nécessaire."))
+		return
+	}
 	cmd := exec.Command("ssh-keygen", "-t", "rsa", "-b", "4096", "-C", "your_email@example.com", "-f", filePath, "-N", "")
 	runCommand(cmd)
-	fmt.Println("Clé SSH générée avec succès !")
+	fmt.Println(successStyle.Render("Clé SSH générée avec succès !"))
 }
 
 // Teste la connexion SSH
@@ -227,4 +239,6 @@ func runCommand(cmd *exec.Cmd) {
 		fmt.Println(formattedOutput)
 		return
 	}
+	fmt.Println(successStyle.Render("Commande exécutée avec succès :"))
+	fmt.Println(formattedOutput)
 }
