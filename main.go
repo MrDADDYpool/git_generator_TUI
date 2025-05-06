@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -28,7 +29,7 @@ var titleASCII = titleStyle.Render(`
   ________._________________ ___  ____ _____________     _____      _____    _______      _____    _____________________________
  /  _____/|   \__    ___/   |   \|    |   \______   \   /     \    /  _  \   \      \    /  _  \  /  _____/\_   _____/\______   \
 /   \  ___|   | |    | /    ~    \    |   /|    |  _/  /  \ /  \  /  /_\  \  /   |   \  /  /_\  \/   \  ___ |    __)_  |       _/
-\    \_\  \   | |    | \    Y    /    |  / |    |   \ /    Y    \/    |    \/    |    \/    |    \    \_\  \|        \ |    |   \
+/\    \_\  \   | |    | \    Y    /    |  / |    |   \ /    Y    \/    |    \/    |    \/    |    \    \_\  \|        \ |    |   \
  \______  /___| |____|  \___|_  /|______/  |______  / \____|__  /\____|__  /\____|__  /\____|__  /\______  /_______  / |____|_  /
         \/                    \/                  \/          \/         \/         \/         \/        \/        \/         \/
 `)
@@ -60,30 +61,42 @@ type model struct {
 	progress progress.Model
 }
 
-func initialModel() model {
+// FinishedMsg is a custom message to indicate progress completion
+type FinishedMsg struct{}
 
+// Implement progress.FinishedMsg to avoid undefined reference
+func (FinishedMsg) String() string {
+	return "Progress finished"
+}
+
+func initialModel() model {
 	ti := textinput.New()
 	ti.Placeholder = "https://gitea.example.com"
 	ti.Focus()
 	ti.CharLimit = 100
 	ti.Width = 40
-	return model{choice: 0, input: ti, step: stepChoice}
+
+	// Initialisation de la barre de progression
+	progressBar := progress.New(
+		progress.WithDefaultGradient(),
+		progress.WithoutPercentage(),
+		progress.WithScaledGradient("green", "blue"),
+	)
+
+	return model{
+		choice:   0,
+		input:    ti,
+		step:     stepChoice,
+		progress: progressBar,
+	}
 }
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, startProgress())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd = nil
-	if msg, ok := msg.(progress.FrameMsg); ok {
-		var c tea.Cmd
-		var progressModel tea.Model
-		progressModel, c = m.progress.Update(msg)
-		cmd = tea.Batch(cmd, c)
-		m.progress = progressModel.(progress.Model)
-		return m, tea.Batch(cmd, c)
-	}
+	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -95,23 +108,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.choice--
 			}
 		case "down":
-			if m.step == stepChoice && m.choice < 2 {
-				m.choice++
+				if m.step == stepChoice && m.choice < 2 {
+					m.choice++
+					return m, tea.Batch(startProgress(), func() tea.Msg {
+						configureGitService("github.com")
+						return FinishedMsg{}
+					})
+				}
 			}
-		case "enter":
-			if m.step == stepChoice {
-				if m.choice == 0 {
-					m.step = stepGitHub
-					configureGitService("github.com")
-					m.step = stepChoice
-				} else if m.choice == 1 {
+			// Removed unreachable code
+			if m.choice == 1 {
 					m.step = stepGitea
 					m.input.Focus()
 				} else {
 					m.step = stepCloneRepo
 					m.input.Focus()
 				}
-			} else if m.step == stepGitea {
+			}
+			// Correctly close the previous if block
+			if m.step == stepGitea {
 				configureGitService(strings.TrimSpace(m.input.Value()))
 				m.input.Reset()
 				m.step = stepChoice
@@ -121,6 +136,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.step = stepChoice
 			}
 		}
+
+	case progress.FrameMsg:
+		var progressCmd tea.Cmd
+		updatedProgress, progressCmd := m.progress.Update(msg)
+		m.progress = updatedProgress
+		return m, progressCmd
 	}
 
 	if m.step == stepGitea || m.step == stepCloneRepo {
@@ -147,13 +168,16 @@ func (m model) View() string {
 		}
 		output += "\n↑↓ pour naviguer, Entrée pour sélectionner, q pour quitter."
 
-	case stepGitea:
-		output += stepTitleStyle.Render("Entrez l'URL de l'instance Gitea :") + "\n"
-		output += m.input.View() + "\n(Entrée pour valider)"
-
-	case stepCloneRepo:
-		output += stepTitleStyle.Render("Entrez l'URL du dépôt à cloner (HTTPS ou SSH) :") + "\n"
-		output += m.input.View() + "\n(Entrée pour valider)"
+	case stepGitHub, stepGitea, stepCloneRepo:
+		output += stepTitleStyle.Render("Progression :") + "\n"
+		output += m.progress.View() + "\n"
+		if m.step == stepGitea {
+			output += stepTitleStyle.Render("Entrez l'URL de l'instance Gitea :") + "\n"
+			output += m.input.View() + "\n(Entrée pour valider)"
+		} else if m.step == stepCloneRepo {
+			output += stepTitleStyle.Render("Entrez l'URL du dépôt à cloner (HTTPS ou SSH) :") + "\n"
+			output += m.input.View() + "\n(Entrée pour valider)"
+		}
 	}
 
 	return output
@@ -241,4 +265,10 @@ func runCommand(cmd *exec.Cmd) {
 	}
 	fmt.Println(successStyle.Render("Commande exécutée avec succès :"))
 	fmt.Println(formattedOutput)
+}
+
+func startProgress() tea.Cmd {
+	return tea.Tick(time.Millisecond*100, func(t time.Time) tea.Msg {
+		return progress.FrameMsg{}
+	})
 }
