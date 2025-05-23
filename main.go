@@ -108,25 +108,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.choice--
 			}
 		case "down":
-				if m.step == stepChoice && m.choice < 2 {
-					m.choice++
-					return m, tea.Batch(startProgress(), func() tea.Msg {
-						configureGitService("github.com")
-						return FinishedMsg{}
-					})
-				}
+			if m.step == stepChoice && m.choice < 2 {
+				m.choice++
 			}
-			// Removed unreachable code
-			if m.choice == 1 {
+		case "enter":
+			if m.step == stepChoice {
+				switch m.choice {
+				case 0:
+					m.step = stepGitHub
+				case 1:
 					m.step = stepGitea
 					m.input.Focus()
-				} else {
+				case 2:
 					m.step = stepCloneRepo
 					m.input.Focus()
 				}
-			}
-			// Correctly close the previous if block
-			if m.step == stepGitea {
+			} else if m.step == stepGitea {
 				configureGitService(strings.TrimSpace(m.input.Value()))
 				m.input.Reset()
 				m.step = stepChoice
@@ -139,8 +136,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case progress.FrameMsg:
 		var progressCmd tea.Cmd
-		updatedProgress, progressCmd := m.progress.Update(msg)
-		m.progress = updatedProgress
+		progressModel, cmd := m.progress.Update(msg)
+		m.progress = progressModel.(progress.Model)
+		progressCmd = cmd
+		if m.progress.Percent() >= 1.0 {
+			return m, tea.Quit // End progress when complete
+		}
 		return m, progressCmd
 	}
 
