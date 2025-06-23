@@ -111,6 +111,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.step == stepChoice && m.choice < 2 {
 				m.choice++
 			}
+		case "ctrl+c", "ctrl+x":
+			if m.step == stepGitHub || m.step == stepGitea || m.step == stepCloneRepo {
+				m.input.Reset()
+				m.step = stepChoice
+				return m, nil
+			}
 		case "enter":
 			if m.step == stepChoice {
 				switch m.choice {
